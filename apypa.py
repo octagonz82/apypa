@@ -1,22 +1,17 @@
 #! /usr/bin/env python
 
 ''' Acab PYthon PArser by ESS-Bilbao Dic 2021
-A python tool to get info from ACAB output fort.6 by 
+A python tool to get info from ACAB output fort.6 by
  Mr. Miguel Magan and Dr. Octavio Gonzalez
 '''
 
-# import linecache
 import io
 import numpy as np
-# import array
-# import sys
 import pandas as pd
 
-# =============================================================================
-
-def is_number(s):
+def __is_number(item):
     try:
-        float(s)
+        float(item)
         return True
     except ValueError:
         return False
@@ -31,10 +26,10 @@ intervals = (
     ('seconds', 1),
     )
 
-def display_time(seconds, granularity=2):
+def __display_time(seconds, granularity=2):
     ''' Change any time expresion in seconds to human readable units \n
     granularity: level of detail of the transformation\n'''
-    if not is_number(seconds):
+    if not __is_number(seconds):
         print('Non-numerical time input')
         return None
     result = []
@@ -44,7 +39,7 @@ def display_time(seconds, granularity=2):
             seconds-=value * count
             if value == 1:
                 name = name.rstrip('s')
-            result.append("{}_{}".format(int(value), name))
+            result.append(f"{int(value)}_{name}")
     if not result:
         result.append('Shutdown')
     return '+'.join(result[:granularity])
@@ -66,7 +61,7 @@ def human_time(dataframe,axis,detail=2):
         print('Axis must be 0 for index or 1 for columns names')
         return dataframe
     print('Before:',times)
-    htimes = [display_time(float(time), detail) for time in times]
+    htimes = [__display_time(float(time), detail) for time in times]
     print('Now:',htimes)
     newdataframe = dataframe.copy()
     if axis == 0:
@@ -75,7 +70,7 @@ def human_time(dataframe,axis,detail=2):
         newdataframe.columns = htimes
     return newdataframe
 
-def GetDataTable(table):
+def __get_data_table(table):
     """ Get the heat/activity/dose info from data, an ACAB output table.
     Returns 't' as the times, 'iso' as the isotopes, and 'data' as actual data
     """
@@ -99,8 +94,7 @@ def GetDataTable(table):
         data[i] = list(palabras[-nt:])
     return {'iso': iso, 'time': t, 'data': data}
 
-
-def __GetStartDatalin(datalines, key):
+def __get_start_datalin(datalines, key):
     """ returns the line position from list datalines where the data relevant
     for key starts  possible keys are 'DISINTEGRATIONS/SEC' for Bq,
     PHOTONS/CCM/SEC for gamma  emission, etc. """
@@ -112,7 +106,6 @@ def __GetStartDatalin(datalines, key):
                 if key in datalines[i+4]:
                     timeset = palabras[-3].replace('.', '')
                     timesets.append(int(timeset))
-
     if len(timesets) == 0:
         print('No relevant data found, nothing to do here...')
         return None
@@ -126,8 +119,7 @@ def __GetStartDatalin(datalines, key):
         datalin.append(i+7)
     return datalin
 
-
-def __GetVolume(datalines):
+def __get_volume(datalines):
     """ Get the volume from datalines. Assumes single value. Will probably
     fail for multiple zones but who uses that"""
     data = iter(datalines)
@@ -138,28 +130,26 @@ def __GetVolume(datalines):
             break
     return volume
 
-def Volume_cell(entrada):
+def __volume_cell(entrada):
     """ Get the volume from file"""
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    volume = __GetVolume(line)
+    volume = __get_volume(line)
     return volume
-
 
 def __getNOGG(lines):
     """Internal function to get the number of gamma groups from text object"""
     for line in lines:
         if 'NOGG   NUMBER OF ACTIVATION GAMMA GROUPS' in line:
-            NOGG = line.split()[-1]
+            nogg = line.split()[-1]
             break
     else:
         return None  #If somehow, we don't find the string (prolly it is not a ACAB file)
-    return int(NOGG)
-
+    return int(nogg)
 
 def __getEGRP(lines):
     """Internal function to get the gamma energies from text object"""
-    EGRP = []
+    egrp = []
     for i, line in enumerate(lines):
         if 'BLOCK #2,  CARD #6' in line:
             nline = i
@@ -168,10 +158,9 @@ def __getEGRP(lines):
     while line.strip():
         values = line.split()
         for v in values:
-            EGRP.append(float(v))
+            egrp.append(float(v))
         line = next(data)
-    return EGRP
-
+    return egrp
 
 def getEGRP(entrada):
     """ Get the Activation gamma groups from file"""
@@ -180,8 +169,40 @@ def getEGRP(entrada):
     EGRP = __getEGRP(line)
     return EGRP
 
+def __purge_dataframe(indata, isotope_list, threshold):
+    '''Keep just the isotopes of interest.
+       If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
+# One axis is times other is strigs, it should work over strings.
+    if all(isinstance(x, str) for x in indata.columns) == True:
+        data = indata
+    else:
+        data = indata.T
+#    print(data.columns)
+    if 0 >= threshold or threshold > 1:
+        return None
+    if 'Subtot' in data.columns:
+        data = data.drop('Subtot',axis= 1)
+# These loops list the main isotopes of any time to generata a list of item common fot every index
+    main_cols = []
+    for col in data.T.columns:
+        part_sum = 0
+        j = 1
+        stop_count = data.T.sort_values(col, ascending=False)[col][0]*threshold
+        while part_sum < stop_count:
+            part_sum += data.T.sort_values(col, ascending=False)[col][j]
+            if data.T.sort_values(col, ascending=False).index[j] not in main_cols:
+                main_cols.append(data.T.sort_values(col, ascending=False).index[j])
+            j += 1
+            if j == len(data.columns):
+                break
+#    print(main_cols,len(main_cols))
+# Let's start the purge...
+    for colum in  data.columns:
+        if colum not in isotope_list and colum != 'Total' and colum not in main_cols:
+            data = data.drop(columns = colum)
+    return data
 
-def GetTimeSets(entrada):
+def get_time_sets(entrada):
     ''' Conocer el identificador de los time set de un fort.6 de ACAB '''
     bl7 = np.zeros((0), dtype='8i')
     bl8 = []
@@ -199,7 +220,6 @@ def GetTimeSets(entrada):
             line = next(lines)
             bl7_1[6:8] = [int(l) for l in line.split()]
             bl7 = np.append(bl7, [bl7_1], axis=0)
-
         if 'BLOCK #8,  CARD #1' in line:
             bl8_1 = np.zeros((bl7[-1, 1]), dtype='f')
             i = 0
@@ -217,64 +237,27 @@ def GetTimeSets(entrada):
                 t = [bool(int(l)) for l in line.split()]
                 bl13_2[i:i+len(t)] = t
                 i += len(t)
-
     for i, timesteps in enumerate(bl8):
         if bl13_2[i]:
             timesets.append(timesteps)
+    timesarray = np.zeros([len(timesets),len(timesets[0])],dtype=float)
+    for i, j in np.ndindex(len(timesets),len(timesets[0])):
+        timesarray[i,j] = float(f'{timesets[i][j]:.2e}')
+    return timesarray
 
-    return timesets
-
-def purge_dataframe(indata, isotope_list, Threshold):
-    '''Keep just the isotopes of interest.
-       If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
-# One axis is times other is strigs, it should work over strings.
-    if all(isinstance(x, str) for x in indata.columns) == True:
-        data = indata
-    else:
-        data = indata.T
-#    print(data.columns)
-    if 0 >= Threshold or Threshold > 1:
-        return None
-    if 'Subtot' in data.columns:
-        data = data.drop('Subtot',axis= 1)
-# These loops list the main isotopes of any time to generata a list of item common fot every index
-    main_cols = []
-    for i, col in enumerate(data.T.columns):
-        part_sum = 0
-        j = 1
-        stop_count = data.T.sort_values(col, ascending=False)[col][0]*Threshold
-        while part_sum < stop_count:
-#            print(col, i, j, len(data.columns))
-            part_sum += data.T.sort_values(col, ascending=False)[col][j]
-            if data.T.sort_values(col, ascending=False).index[j] not in main_cols:
-                main_cols.append(data.T.sort_values(col, ascending=False).index[j])
-            j += 1
-            if j == len(data.columns):
-                break
-#            print(i,data.T.sort_values(col,ascending=False).index[i],part_sum,stop_count)
-#    print(main_cols,len(main_cols))
-# Let's start the purge...
-    for colum in  data.columns:
-        if colum not in isotope_list and colum != 'Total' and colum not in main_cols:
-            data = data.drop(columns = colum)
-    return data
-
-# =========================================================================
-# =========================================================================
-
-def RadActIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
+def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False):
     ''' Gets the Radionulcide decay of a cell from ACAB\n
     isotope_list: List of isotopes of interest (All: check all of them)\n
     Threshold: Pay attentions to isotopes up to represent Total*Threshold at any time'''
-    print('RadActIsotopes_full_pd',entrada, isotope_list, Threshold)
+    print('RadActIsotopes_full_pd',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __GetStartDatalin(line, 'DISINTEGRATIONS/SEC')
+    datalin = __get_start_datalin(line, 'DISINTEGRATIONS/SEC')
 #    print(datalin)
     if not datalin:
         print('NO radioactive material, nothing to do here...\n')
         return 0, 0
-    raw_data = [GetDataTable(line[dl:]) for dl in datalin]
+    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
@@ -289,38 +272,38 @@ def RadActIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
     dataT.set_index = 'decay_times_s'
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = purge_dataframe(dataT,isotope_list,Threshold)
+    dataT = __purge_dataframe(dataT,isotope_list,threshold)
     if not isinstance(dataT,pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
 #    Tool to generate molar files for interest nuclides
-    print("Easy print: \n dataT.to_csv('Summary_decay_Nuclides_Bq_s.csv',sep=',', index_label = 'decay_times_s',float_format='%.4E')")
-
-    print("Easy plot :\n data.plot(y=['isotope'],xlabel='decay_times_s',ylabel='Nuclide radioactivity Bq/s',logx=True,logy=True,colormap='jet').get_figure().savefig('Summary_decay_Nuclides_Bq_s.png',bbox_inches='tight',dpi=200)")
-
+    if easy:
+        print("Easy print: \ndataT.to_csv('Summary_decay_Nuclides_Bq_s.csv',"
+              "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
+        print("Easy plot :\ndata.plot(y=['isotope'],xlabel='decay_times_s',"
+              "ylabel='Nuclide radioactivity Bq/s',logx=True,"
+              "logy=True,colormap='jet').get_figure()."
+              "savefig('Summary_decay_Nuclides_Bq_s.png',bbox_inches='tight',dpi=200)")
+    dataT.columns.name = 'decay_nuclides_Bq'
     return dataT
 
-#===================================================================================================
-
-def Isotopes_molarity(entrada,isotope_list='All',Threshold=0.9):
+def iso_mol(entrada,isotope_list='All',threshold=0.9, easy=False):
     ''' Gets the mol composition of a cell from ACAB\n
     isotope_list: List of isotopes of interest (All: check all of them)\n
     Threshold: Pay attentions to isotopes up to represent Total*Threshold at any time'''
-    print('Isotopes_molarity ',entrada, isotope_list, Threshold)
+    print('Isotopes_molarity ',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __GetStartDatalin(line, 'NUCLIDE CONCENTRATIONS,  AT.GR.')
+    datalin = __get_start_datalin(line, 'NUCLIDE CONCENTRATIONS,  AT.GR.')
 #    print(datalin)
-
     if not datalin:
         print('No concentration results, nothing to do here...')
         return 0, 0
-
-    raw_data = [GetDataTable(line[dl:]) for dl in datalin]
-
+    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
+    volume = __get_volume(line)
     for raw_i in raw_data[1:]:
         additionalframes.append(pd.DataFrame(raw_i['data'],raw_i['iso'],raw_i['time']))
     for frame in additionalframes:
@@ -332,114 +315,110 @@ def Isotopes_molarity(entrada,isotope_list='All',Threshold=0.9):
     dataT.set_index = 'decay_times_s'
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = purge_dataframe(dataT,isotope_list,Threshold)
+    dataT = __purge_dataframe(dataT,isotope_list,threshold)
     if not isinstance(dataT,pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
-
-    print("Easy print: \n dataframe.to_csv('Nuclide_quantities_in_Mol.csv',sep=',', index_label = 'decay_times_s',float_format='%.4E')")
-
-    print("Easy plot :\n data.plot(y=['isotope'],xlabel='decay_times_s',ylabel='mol',logx=True,logy=True,colormap='jet').get_figure().savefig('prueba.png',bbox_inches='tight',dpi=200)")
-
+    if easy:
+        print("Easy print: \ndataframe.to_csv('Nuclide_quantities_in_Mol.csv',"
+              "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
+        print("Easy plot :\ndata.plot(y=['isotope'],xlabel='decay_times_s',"
+              "ylabel='mol',logx=True,logy=True,colormap='jet').get_figure()"
+              ".savefig('prueba.png',bbox_inches='tight',dpi=200)")
+    dataT.columns.name = f'nuclide_mol_in_{volume:.2f}_cm3'
     return dataT
 
-# =============================================================================
-# =============================================================================
-
-def gammas_full_pd(entrada):
+def gammas_full_pd(entrada, easy=False):
     ''' Permite conocer la emision gamma a lo largo de todo el tiempo de decaimiento '''
     print('gammas_full_pd', entrada)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
     NOGG = __getNOGG(line)
-    datalin = __GetStartDatalin(line, 'PHOTONS/CCM/SEC')
-
+    datalin = __get_start_datalin(line, 'PHOTONS/CCM/SEC')
     if not datalin:
         print("NO Gamma data found, nothing to do here...\n")
         return None
     datalin = [dl + 1 for dl in datalin]  # due to fort.6 format
     raw_data = [line[dl:dl+NOGG+1] for dl in datalin]
-
     data = pd.read_csv(io.StringIO('\n'.join(raw_data[0]).replace('RESTART', '1.0').
                                    replace('S', '')), delim_whitespace=True)
     add_data = [pd.read_csv(io.StringIO('\n'.join(raw).replace('RESTART', '1.0').replace('S', '')),
                           delim_whitespace=True) for raw in raw_data[1:]]
-
     for tab in add_data:
         for col in tab.columns:
             if col not in data.columns:
                 datacolum = tab[col]
                 data = data.join(datacolum)
     data = data.set_index('(MEV)')
-
     total = [data[time].sum() for time in data.columns]
     total_df = pd.DataFrame([total], columns=data.columns, index=['Total'])
-    data = data.append(total_df)
-
-    print("Easy print: \n data.to_csv('Gamma_release_rates_Gammas_cm2_s.csv',sep=',',index_label = 'Energy_MeV',float_format='%.4E')")
+    data = pd.concat([data,total_df])
+    data.columns = data.columns.astype(float)
+    data.columns.name = 'gamma_flux_photons/ccm/s'
+    if easy:
+        print("Easy print: \ndata.to_csv('Gamma_release_rates_Gammas_cm2_s.csv'"
+              ",sep=',',index_label = 'Energy_MeV',float_format='%.4E')")
     return data
 
-def gammas_by_Egroups(data, EGROUPS, plot=False):
+def gammas_by_Egroups(data, egroups, plot=False, easy=False):
     ''' Distribute gamma data by energy groups list '''
     dataT = data.T
     total = list(dataT['total'])
     dataT.drop(['total'],axis = 1, inplace = True)
     data = dataT.T
-
-    data_by_Egroups = pd.DataFrame(np.zeros((len(data.columns),len(EGROUPS))),
-                                   columns=EGROUPS,index=data.columns)
+    data_by_Egroups = pd.DataFrame(np.zeros((len(data.columns),len(egroups))),
+                                   columns=egroups,index=data.columns)
     for i,j in np.ndindex(len(data.columns),len(data.index)):
-        if data.index[j] >= EGROUPS[1]:
-            data_by_Egroups[EGROUPS[2]][data.columns[i]] = data_by_Egroups[EGROUPS[2]][data.columns[i]] + data[data.columns[i]][data.index[j]] / total[i]
-        if data.index[j] < EGROUPS[0]:
-            data_by_Egroups[EGROUPS[0]][data.columns[i]] = data_by_Egroups[EGROUPS[0]][data.columns[i]] + data[data.columns[i]][data.index[j]] / total[i]
-        if EGROUPS[0] <= data.index[j] < EGROUPS[1]:
-            data_by_Egroups[EGROUPS[1]][data.columns[i]] = data_by_Egroups[EGROUPS[1]][data.columns[i]] + data[data.columns[i]][data.index[j]] / total[i]
-
+        if data.index[j] >= egroups[1]:
+            data_by_Egroups[egroups[2]][data.columns[i]] += data[data.columns[i]][data.index[j]] / total[i]
+        if data.index[j] < egroups[0]:
+            data_by_Egroups[egroups[0]][data.columns[i]] += data[data.columns[i]][data.index[j]] / total[i]
+        if egroups[0] <= data.index[j] < egroups[1]:
+            data_by_Egroups[egroups[1]][data.columns[i]] += data[data.columns[i]][data.index[j]] / total[i]
     Index_Egroups = []
-    for i in EGROUPS:
+    for i in egroups:
         Index_Egroups.append('<=_'+str(i)+'MeV')
     data_by_Egroups.columns = Index_Egroups
-
     data_by_EgroupsT = data_by_Egroups.T
-    print("Easy print: \n data_by_EgroupsT.to_csv('Gamma_release_rates_Gammas_cm3_s_byE_groups.csv',sep=',', index_label = 'Energy_MeV',float_format='%.4E')")
-
-#dataE.T.plot.bar(xlabel='decay_times_s',stacked=True,colormap='jet').get_figure().savefig('prueba.png',bbox_inches='tight',dpi=200)
-
     if plot is True:
-        dataE = pd.DataFrame(np.zeros((len(data.columns),len(EGROUPS))),
-                                   columns=EGROUPS,index=data.columns)
+        dataE = pd.DataFrame(np.zeros((len(data.columns),len(egroups))),
+                                   columns=egroups,index=data.columns)
         for i,j in np.ndindex(len(data.columns),len(data.index)):
-            if data.index[j] >= EGROUPS[1]:
-                dataE[EGROUPS[2]][data.columns[i]] = dataE[EGROUPS[2]][data.columns[i]] + data[data.columns[i]][data.index[j]]
-            if data.index[j] < EGROUPS[0]:
-                dataE[EGROUPS[0]][data.columns[i]] = dataE[EGROUPS[0]][data.columns[i]] + data[data.columns[i]][data.index[j]]
-            if EGROUPS[0] <= data.index[j] < EGROUPS[1]:
-                dataE[EGROUPS[1]][data.columns[i]] = dataE[EGROUPS[1]][data.columns[i]] + data[data.columns[i]][data.index[j]]
-        if all(is_number(x) for x in dataE.index):
+            if data.index[j] >= egroups[1]:
+                dataE[egroups[2]][data.columns[i]] += data[data.columns[i]][data.index[j]]
+            if data.index[j] < egroups[0]:
+                dataE[egroups[0]][data.columns[i]] += data[data.columns[i]][data.index[j]]
+            if egroups[0] <= data.index[j] < egroups[1]:
+                dataE[egroups[1]][data.columns[i]] += data[data.columns[i]][data.index[j]]
+        if all(__is_number(x) for x in dataE.index):
             dataE = human_time(dataE,0,2)
         dataE.columns = Index_Egroups
         plotname = "Gamma_release_rates_Gammas_cm2_s_byE_groups.png"
         dataE.plot.bar(xlabel='decay_times_s', ylabel='Gamma_release_rates_Gammas/cm3/s',
-                       stacked=True, colormap='jet').get_figure().savefig(plotname, bbox_inches='tight', dpi=200, figsize=(16, 9))
-    print("Easy plot :use kwarg plot=True")
+                       stacked=True, colormap='jet').get_figure().savefig(
+                           plotname, bbox_inches='tight', dpi=200, figsize=(16, 9))
+    data_by_EgroupsT.columns.name = 'gamma_flux_photons/ccm/s'
+    if easy:
+        print("Easy plot :use kwarg plot=True")
+        print("Easy print: \ndata_by_EgroupsT.to_csv"
+              "('Gamma_release_rates_Gammas_cm3_s_byE_groups.csv',sep=',', "
+              "index_label = 'Energy_MeV',float_format='%.4E')")
     return data_by_EgroupsT
 
-#=============================================================================
-def HeatIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
+def heat_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False):
     ''' Gets the Radionuclide afterheat generation of a cell from ACAB\n
     isotope_list: List of isotopes of interest (All: check all of them)\n
     Threshold: Pay attention to isotopes up to represent Total*Threshold at any time'''
-    print('HeatIsotopes_full',entrada, isotope_list,Threshold)
+    print('HeatIsotopes_full',entrada, isotope_list,threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __GetStartDatalin(line, 'NUCLIDE THERMAL POWER, WATTS')
-    volume = __GetVolume(line)
+    datalin = __get_start_datalin(line, 'NUCLIDE THERMAL POWER, WATTS')
+    volume = __get_volume(line)
     if not datalin:
         print('No afterheat results, nothing to do here...')
         return None
-    raw_data = [GetDataTable(line[dl:]) for dl in datalin]
-# the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS 
+    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
+# the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = [pd.DataFrame(r['data'], r['iso'], r['time']) for r in raw_data]
     for frame in additionalframes:
@@ -448,33 +427,37 @@ def HeatIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
                 datacolum = frame[colum]
                 data = data.join(datacolum)
     dataT = data.T/volume # Change of units to w/cm3!!!
-# Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just 
+# Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = purge_dataframe(dataT, isotope_list, Threshold)
+    dataT = __purge_dataframe(dataT, isotope_list, threshold)
     if not isinstance(dataT, pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
-
 #    Tool to generate molar files for interest nuclides
-    print("Easy print: \n dataT.to_csv('Summary_afterheat_Watts_cm3.csv',sep=',', index_label = 'decay_times_s',float_format='%.4E')")
-    print("Easy plot :\n data.plot(y=['isotope'],xlabel='decay_times_s',ylabel='Nuclide afterheat W/cm3',logx=True,logy=True,colormap='jet').get_figure().savefig('prueba.png',bbox_inches='tight',dpi=200)")
-
+    dataT.columns.name = 'heat_W/ccm'
+    if easy:
+        print("Easy print: \ndataT.to_csv('Summary_afterheat_Watts_cm3.csv',"
+              "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
+        print("Easy plot: \ndata.plot(y=['isotope'],xlabel='decay_times_s',"
+              "ylabel='Nuclide afterheat W/cm3',logx=True,logy=True,"
+              "colormap='jet').get_figure().savefig('prueba.png'"
+              ",bbox_inches='tight',dpi=200)")
     return dataT
 # =========================================================================
 
-def GammaDoseIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
+def gamma_dose_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False):
     ''' Gets the Radionuclide gamma generation of a cell from ACAB\n
     isotope_list: List of isotopes of interest (All: check all of them)\n
     Threshold: Pay attentions to isotopes up to represent Total*Threshold at any time'''
-    print('GammaDoseIsotopes_full ',entrada, isotope_list, Threshold)
+    print('GammaDoseIsotopes_full ',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __GetStartDatalin(line, 'SURFACE GAMMA DOSE RATES DUE TO')
+    datalin = __get_start_datalin(line, 'SURFACE GAMMA DOSE RATES DUE TO')
 #    print(datalin)
     if not datalin:
         print('No Dose results, nothing to do here...')
         return None
-    raw_data = [GetDataTable(line[dl:]) for dl in datalin]
+    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
@@ -488,14 +471,19 @@ def GammaDoseIsotopes_full_pd(entrada, isotope_list='All', Threshold=0.9):
     dataT = data.T*1000 # Change of units to mSv/h!!!!
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = purge_dataframe(dataT, isotope_list, Threshold)
+    dataT = __purge_dataframe(dataT, isotope_list, threshold)
     if not isinstance(dataT, pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
-
-    print("Easy print: \n dataT.to_csv('Summary_gamma_Eq_dose_mSv_h.csv',sep=',', index_label = 'decay_times_s',float_format='%.4E')")
-    print("Easy plot :\n data.plot(y=['isotope'],xlabel='decay_times_s',ylabel='Surface equivalent gamma dose rates mSv/h',logx=True,logy=True,colormap='jet').get_figure().savefig('Summary_gamma_Eq_dose_mSv_h.png',bbox_inches='tight',dpi=200)")
-
+    dataT.columns.name = 'dose_nuclides_mSv/h'
+    if easy:
+        print("Easy print: \ndataT.to_csv('Summary_gamma_Eq_dose_mSv_h.csv',"
+              "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
+        print("Easy plot :\ndata.plot(y=['isotope'],xlabel='decay_times_s',"
+              "ylabel='Surface equivalent gamma dose rates mSv/h',logx=True,"
+              "logy=True,colormap='jet').get_figure()"
+              ".savefig('Summary_gamma_Eq_dose_mSv_h.png',"
+              "bbox_inches='tight',dpi=200)")
     return dataT
 
 # =============================================================================
