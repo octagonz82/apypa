@@ -9,7 +9,7 @@ import io
 import numpy as np
 import pandas as pd
 
-def __is_number(item):
+def _is_number(item):
     try:
         float(item)
         return True
@@ -26,10 +26,10 @@ intervals = (
     ('seconds', 1),
     )
 
-def __display_time(seconds, granularity=2):
+def _display_time(seconds, granularity=2):
     ''' Change any time expresion in seconds to human readable units \n
     granularity: level of detail of the transformation\n'''
-    if not __is_number(seconds):
+    if not _is_number(seconds):
         print('Non-numerical time input')
         return None
     result = []
@@ -61,7 +61,7 @@ def human_time(dataframe,axis,detail=2):
         print('Axis must be 0 for index or 1 for columns names')
         return dataframe
     print('Before:',times)
-    htimes = [__display_time(float(time), detail) for time in times]
+    htimes = [_display_time(float(time), detail) for time in times]
     print('Now:',htimes)
     newdataframe = dataframe.copy()
     if axis == 0:
@@ -70,7 +70,7 @@ def human_time(dataframe,axis,detail=2):
         newdataframe.columns = htimes
     return newdataframe
 
-def __get_data_table(table):
+def _get_data_table(table):
     """ Get the heat/activity/dose info from data, an ACAB output table.
     Returns 't' as the times, 'iso' as the isotopes, and 'data' as actual data
     """
@@ -94,7 +94,7 @@ def __get_data_table(table):
         data[i] = list(palabras[-nt:])
     return {'iso': iso, 'time': t, 'data': data}
 
-def __get_start_datalin(datalines, key):
+def _get_start_datalin(datalines, key):
     """ returns the line position from list datalines where the data relevant
     for key starts  possible keys are 'DISINTEGRATIONS/SEC' for Bq,
     PHOTONS/CCM/SEC for gamma  emission, etc. """
@@ -119,7 +119,7 @@ def __get_start_datalin(datalines, key):
         datalin.append(i+7)
     return datalin
 
-def __get_volume(datalines):
+def _get_volume(datalines):
     """ Get the volume from datalines. Assumes single value. Will probably
     fail for multiple zones but who uses that"""
     data = iter(datalines)
@@ -130,14 +130,14 @@ def __get_volume(datalines):
             break
     return volume
 
-def __volume_cell(entrada):
+def _volume_cell(entrada):
     """ Get the volume from file"""
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    volume = __get_volume(line)
+    volume = _get_volume(line)
     return volume
 
-def __getNOGG(lines):
+def _getNOGG(lines):
     """Internal function to get the number of gamma groups from text object"""
     for line in lines:
         if 'NOGG   NUMBER OF ACTIVATION GAMMA GROUPS' in line:
@@ -147,7 +147,7 @@ def __getNOGG(lines):
         return None  #If somehow, we don't find the string (prolly it is not a ACAB file)
     return int(nogg)
 
-def __getEGRP(lines):
+def _getEGRP(lines):
     """Internal function to get the gamma energies from text object"""
     egrp = []
     for i, line in enumerate(lines):
@@ -166,10 +166,10 @@ def getEGRP(entrada):
     """ Get the Activation gamma groups from file"""
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    EGRP = __getEGRP(line)
+    EGRP = _getEGRP(line)
     return EGRP
 
-def __purge_dataframe(indata, isotope_list, threshold):
+def _purge_dataframe(indata, isotope_list, threshold):
     '''Keep just the isotopes of interest.
        If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
 # One axis is times other is strigs, it should work over strings.
@@ -252,12 +252,12 @@ def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=Fa
     print('RadActIsotopes_full_pd',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __get_start_datalin(line, 'DISINTEGRATIONS/SEC')
+    datalin = _get_start_datalin(line, 'DISINTEGRATIONS/SEC')
 #    print(datalin)
     if not datalin:
         print('NO radioactive material, nothing to do here...\n')
         return 0, 0
-    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
+    raw_data = [_get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
@@ -272,7 +272,7 @@ def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=Fa
     dataT.set_index = 'decay_times_s'
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = __purge_dataframe(dataT,isotope_list,threshold)
+    dataT = _purge_dataframe(dataT,isotope_list,threshold)
     if not isinstance(dataT,pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
@@ -294,16 +294,16 @@ def iso_mol(entrada,isotope_list='All',threshold=0.9, easy=False):
     print('Isotopes_molarity ',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __get_start_datalin(line, 'NUCLIDE CONCENTRATIONS,  AT.GR.')
+    datalin = _get_start_datalin(line, 'NUCLIDE CONCENTRATIONS,  AT.GR.')
 #    print(datalin)
     if not datalin:
         print('No concentration results, nothing to do here...')
         return 0, 0
-    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
+    raw_data = [_get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
-    volume = __get_volume(line)
+    volume = _get_volume(line)
     for raw_i in raw_data[1:]:
         additionalframes.append(pd.DataFrame(raw_i['data'],raw_i['iso'],raw_i['time']))
     for frame in additionalframes:
@@ -315,7 +315,7 @@ def iso_mol(entrada,isotope_list='All',threshold=0.9, easy=False):
     dataT.set_index = 'decay_times_s'
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = __purge_dataframe(dataT,isotope_list,threshold)
+    dataT = _purge_dataframe(dataT,isotope_list,threshold)
     if not isinstance(dataT,pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
@@ -333,8 +333,8 @@ def gammas_full_pd(entrada, easy=False):
     print('gammas_full_pd', entrada)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    NOGG = __getNOGG(line)
-    datalin = __get_start_datalin(line, 'PHOTONS/CCM/SEC')
+    NOGG = _getNOGG(line)
+    datalin = _get_start_datalin(line, 'PHOTONS/CCM/SEC')
     if not datalin:
         print("NO Gamma data found, nothing to do here...\n")
         return None
@@ -390,7 +390,7 @@ def gammas_by_Egroups(data, egroups, plot=False, easy=False):
                 dataE[egroups[0]][data.columns[i]] += data[data.columns[i]][data.index[j]]
             if egroups[0] <= data.index[j] < egroups[1]:
                 dataE[egroups[1]][data.columns[i]] += data[data.columns[i]][data.index[j]]
-        if all(__is_number(x) for x in dataE.index):
+        if all(_is_number(x) for x in dataE.index):
             dataE = human_time(dataE,0,2)
         dataE.columns = Index_Egroups
         plotname = "Gamma_release_rates_Gammas_cm2_s_byE_groups.png"
@@ -412,12 +412,12 @@ def heat_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False
     print('HeatIsotopes_full',entrada, isotope_list,threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __get_start_datalin(line, 'NUCLIDE THERMAL POWER, WATTS')
-    volume = __get_volume(line)
+    datalin = _get_start_datalin(line, 'NUCLIDE THERMAL POWER, WATTS')
+    volume = _get_volume(line)
     if not datalin:
         print('No afterheat results, nothing to do here...')
         return None
-    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
+    raw_data = [_get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = [pd.DataFrame(r['data'], r['iso'], r['time']) for r in raw_data]
@@ -429,7 +429,7 @@ def heat_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False
     dataT = data.T/volume # Change of units to w/cm3!!!
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = __purge_dataframe(dataT, isotope_list, threshold)
+    dataT = _purge_dataframe(dataT, isotope_list, threshold)
     if not isinstance(dataT, pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
@@ -452,12 +452,12 @@ def gamma_dose_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy
     print('GammaDoseIsotopes_full ',entrada, isotope_list, threshold)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
-    datalin = __get_start_datalin(line, 'SURFACE GAMMA DOSE RATES DUE TO')
+    datalin = _get_start_datalin(line, 'SURFACE GAMMA DOSE RATES DUE TO')
 #    print(datalin)
     if not datalin:
         print('No Dose results, nothing to do here...')
         return None
-    raw_data = [__get_data_table(line[dl:]) for dl in datalin]
+    raw_data = [_get_data_table(line[dl:]) for dl in datalin]
 # the same using pandas! sort this a bit, put isotopes together & eliminate redundant RESTARTS
     data = pd.DataFrame(raw_data[0]['data'],raw_data[0]['iso'],raw_data[0]['time'])
     additionalframes = []
@@ -471,7 +471,7 @@ def gamma_dose_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy
     dataT = data.T*1000 # Change of units to mSv/h!!!!
 # Fun starts here: Keep just the isotopes of interest if isotopes = 'All' just
 ## eliminates isotopes that are 0 at everytime
-    dataT = __purge_dataframe(dataT, isotope_list, threshold)
+    dataT = _purge_dataframe(dataT, isotope_list, threshold)
     if not isinstance(dataT, pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
