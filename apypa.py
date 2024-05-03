@@ -171,7 +171,7 @@ def getEGRP(entrada):
 
 def _purge_dataframe(indata, isotope_list, threshold):
     '''Keep just the isotopes of interest.
-       If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
+        If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
 # One axis is times other is strigs, it should work over strings.
     if all(isinstance(x, str) for x in indata.columns) == True:
         data = indata
@@ -187,9 +187,9 @@ def _purge_dataframe(indata, isotope_list, threshold):
     for col in data.T.columns:
         part_sum = 0
         j = 1
-        stop_count = data.T.sort_values(col, ascending=False)[col][0]*threshold
+        stop_count = data.T[col].sort_values(ascending=False).iloc[0]*threshold
         while part_sum < stop_count:
-            part_sum += data.T.sort_values(col, ascending=False)[col][j]
+            part_sum += data.T[col].sort_values(ascending=False).iloc[j]
             if data.T.sort_values(col, ascending=False).index[j] not in main_cols:
                 main_cols.append(data.T.sort_values(col, ascending=False).index[j])
             j += 1
