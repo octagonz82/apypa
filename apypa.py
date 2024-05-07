@@ -2,7 +2,7 @@
 
 ''' Acab PYthon PArser by ESS-Bilbao Dic 2021
 A python tool to get info from ACAB output fort.6 by
- Mr. Miguel Magan and Dr. Octavio Gonzalez
+Mr. Miguel Magan and Dr. Octavio Gonzalez
 '''
 
 import io
@@ -341,9 +341,9 @@ def gammas_full_pd(entrada, easy=False):
     datalin = [dl + 1 for dl in datalin]  # due to fort.6 format
     raw_data = [line[dl:dl+NOGG+1] for dl in datalin]
     data = pd.read_csv(io.StringIO('\n'.join(raw_data[0]).replace('RESTART', '1.0').
-                                   replace('S', '')), delim_whitespace=True)
+                                    replace('S', '')), sep='\s+')
     add_data = [pd.read_csv(io.StringIO('\n'.join(raw).replace('RESTART', '1.0').replace('S', '')),
-                          delim_whitespace=True) for raw in raw_data[1:]]
+                            sep='\s+') for raw in raw_data[1:]]
     for tab in add_data:
         for col in tab.columns:
             if col not in data.columns:
