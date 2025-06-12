@@ -169,7 +169,7 @@ def getEGRP(entrada):
     EGRP = _getEGRP(line)
     return EGRP
 
-def _purge_dataframe(indata, isotope_list, threshold):
+def _purge_dataframe(indata, isotope_list, thr):
     '''Keep just the isotopes of interest.
         If isotopes = 'All' just eliminates isotopes that are 0 at every time '''
 # One axis is times other is strigs, it should work over strings.
@@ -178,28 +178,37 @@ def _purge_dataframe(indata, isotope_list, threshold):
     else:
         data = indata.T
 #    print(data.columns)
-    if 0 >= threshold or threshold > 1:
-        return None
+    if thr <= 0 or thr > 1:
+        thr = input('Threshold must be between 0 and 1, please input a valid value: ')
     if 'Subtot' in data.columns:
         data = data.drop('Subtot',axis= 1)
+    if 'Total' in data.columns:
+        total = data['Total']
+        data = data.drop('Total',axis= 1)
+    if isotope_list == 'All':
+        isotope_list = []
+# Eliminamos los isotopos que sean todo 0 y no esten en la lista de isotopos
+    for col in data.columns:
+        if all(data[col] == 0) and col not in isotope_list:
+            data = data.drop(columns=col)
 # These loops list the main isotopes of any time to generata a list of item common fot every index
     main_cols = []
     for col in data.T.columns:
-        part_sum = 0
-        j = 1
-        stop_count = data.T[col].sort_values(ascending=False).iloc[0]*threshold
-        while part_sum < stop_count:
-            part_sum += data.T[col].sort_values(ascending=False).iloc[j]
-            if data.T.sort_values(col, ascending=False).index[j] not in main_cols:
-                main_cols.append(data.T.sort_values(col, ascending=False).index[j])
-            j += 1
-            if j == len(data.columns):
+        part_sum = 0.0
+        stop_count = data.T[col].sum()*thr
+        for ind in data.T[col].sort_values(ascending=False).index:
+            # print(j, col, part_sum, stop_count,len(main_cols))
+            part_sum += data.T[col][ind]
+            if ind not in main_cols:
+                main_cols.append(ind)
+            if part_sum >= stop_count:
                 break
-#    print(main_cols,len(main_cols))
 # Let's start the purge...
     for colum in  data.columns:
         if colum not in isotope_list and colum != 'Total' and colum not in main_cols:
             data = data.drop(columns = colum)
+# let's add total again
+    data = pd.concat([data,total],axis=1)
     return data
 
 def get_time_sets(entrada):
