@@ -483,7 +483,8 @@ def gamma_dose_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy
     if not isinstance(dataT, pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
-    dataT.columns.name = 'dose_nuclides_mSv/h'
+    for col in dataT.columns:
+        dataT.rename(columns={col: col+'_ContactDose_[mSv/h]'}, inplace=True)
     if easy:
         print("Easy print: \ndataT.to_csv('Summary_gamma_Eq_dose_mSv_h.csv',"
               "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
