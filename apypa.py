@@ -254,11 +254,11 @@ def get_time_sets(entrada):
         timesarray[i,j] = float(f'{timesets[i][j]:.2e}')
     return timesarray
 
-def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=False):
+def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9,normal=False):
     ''' Gets the Radionulcide decay of a cell from ACAB\n
     isotope_list: List of isotopes of interest (All: check all of them)\n
     Threshold: Pay attentions to isotopes up to represent Total*Threshold at any time'''
-    print('RadActIsotopes_full_pd',entrada, isotope_list, threshold)
+    print('RadActIsotopes_full_pd',entrada, isotope_list, threshold, normal)
     with open(entrada, 'r', encoding="UTF-8") as datafile:
         line = datafile.readlines()
     datalin = _get_start_datalin(line, 'DISINTEGRATIONS/SEC')
@@ -285,15 +285,14 @@ def rad_act_isotopes_full_pd(entrada, isotope_list='All', threshold=0.9, easy=Fa
     if not isinstance(dataT,pd.DataFrame):
         print('Wrong threshold limit, it should be between 0 and 1')
         return None
+    if normal:
+        dataT = dataT / _volume_cell(entrada)  # Change of units to Bq/cm3
 #    Tool to generate molar files for interest nuclides
-    if easy:
-        print("Easy print: \ndataT.to_csv('Summary_decay_Nuclides_Bq_s.csv',"
-              "sep=',', index_label = 'decay_times_s',float_format='%.4E')")
-        print("Easy plot :\ndata.plot(y=['isotope'],xlabel='decay_times_s',"
-              "ylabel='Nuclide radioactivity Bq/s',logx=True,"
-              "logy=True,colormap='jet').get_figure()."
-              "savefig('Summary_decay_Nuclides_Bq_s.png',bbox_inches='tight',dpi=200)")
-    dataT.columns.name = 'decay_nuclides_Bq'
+    for col in dataT.columns:
+        if normal:
+            dataT.rename(columns={col: col+'_Activity_[Bq/cm3]'}, inplace=True)
+        else:
+            dataT.rename(columns={col: col+'_Activity_[Bq]'}, inplace=True)
     return dataT
 
 def iso_mol(entrada,isotope_list='All',threshold=0.9, easy=False):
