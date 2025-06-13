@@ -75,7 +75,7 @@ def _get_data_table(table):
     Returns 't' as the times, 'iso' as the isotopes, and 'data' as actual data
     """
     l0 = table[0].split()
-    l0 = [x if x not in ['RESTART', 'SHUTDOWN'] else '1' for x in l0]
+    l0 = [x if x not in ['RESTART', 'SHUTDOWN'] else '0' for x in l0]
     l0 = [x.replace('S', '') for x in l0]
     t = [float(x) for x in l0[1:]]
     nt = len(t)
