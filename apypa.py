@@ -16,6 +16,20 @@ def _is_number(item):
     except ValueError:
         return False
 
+
+def _safe_float(item, default=0.0):
+    """Convert to float; if not valid numeric string, return default."""
+    # Keep numeric values and castable strings, but safely fallback on invalid strings.
+    try:
+        if isinstance(item, str):
+            item_str = item.strip()
+            if item_str == '' or not _is_number(item_str):
+                return default
+            return float(item_str)
+        return float(item)
+    except (ValueError, TypeError):
+        return default
+
 intervals = (
     ('years', 31536000), # 60 * 60 * 24 * 365
     ('months', 2592000), # 60 * 60 * 24 * 30
@@ -77,7 +91,7 @@ def _get_data_table(table):
     l0 = table[0].split()
     l0 = [x if x not in ['RESTART', 'SHUTDOWN'] else '0' for x in l0]
     l0 = [x.replace('S', '') for x in l0]
-    t = [float(x) for x in l0[1:]]
+    t = [_safe_float(x, default=0.0) for x in l0[1:]]
     nt = len(t)
     for i, line in enumerate(table):
         if 'TOTAL' in line[0:7]:
@@ -158,7 +172,7 @@ def _getEGRP(lines):
     while line.strip():
         values = line.split()
         for v in values:
-            egrp.append(float(v))
+            egrp.append(_safe_float(v, default=0.0))
         line = next(data)
     return egrp
 
