@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>APYPA · Results explorer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%231b3944'/%3E%3Cpath d='M7 28L14 20L21 24L33 9' stroke='%2371d8b3' fill='none' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/vendor/plotly-cartesian-4.1.2.min.js"></script>
+  <script defer src="/static/vendor/plotly-locale-en-4.1.2.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">APYPA<span class="brand-mark">↗</span></a><span class="brand-desc">Activation results explorer</span><div class="top-right"><span id="local-status">Local</span><button id="refresh" class="button subtle">↻ Refresh data</button></div></header>
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Result selection">
+      <section><div class="section-heading"><h2>Cells</h2><div><button id="all-cells" class="text-button">All</button><button id="no-cells" class="text-button">None</button></div></div><div id="cells" class="cell-list">Searching for files…</div></section>
+      <section><label class="control-label" for="family">Quantity</label><select id="family"><option value="activity">Activity</option><option value="composition">Composition</option><option value="heat">Thermal power</option><option value="dose">Surface gamma dose</option><option value="gamma">Gamma spectrum</option></select><p id="unit-note" class="hint"></p><div id="gamma-mode" class="segmented" hidden><button data-mode="spectrum" class="active">By energy</button><button data-mode="evolution">By time</button></div></section>
+      <section id="isotope-controls"><div class="section-heading"><h2>Isotopes</h2><span id="series-count" class="count"></span></div><input id="isotope-search" type="search" placeholder="Search, e.g. Co60" aria-label="Search for an isotope"><div class="quick-actions"><button id="only-total" class="text-button">Total only</button><button id="no-series" class="text-button">Clear</button></div><div class="top-selection"><label for="top-count">Top isotopes</label><input id="top-count" type="number" required min="1" step="1" value="5" aria-label="Number of top isotopes"><button id="apply-top" class="text-button">Apply + total</button></div><div id="isotopes" class="option-list" aria-label="Available isotopes"></div></section>
+      <section id="gamma-times" hidden><div class="section-heading"><h2>Spectrum times</h2></div><div class="quick-actions"><button id="last-time" class="text-button">Last</button><button id="three-times" class="text-button">First, middle and last</button></div><div id="times" class="option-list"></div></section>
+      <section id="gamma-bins" hidden><div class="section-heading"><h2>Energy groups</h2></div><p class="hint">Upper boundaries in MeV.</p><div id="bins" class="option-list"></div></section>
+      <details class="context"><summary>Zone and time set</summary><label class="control-label" for="zone">Zone</label><select id="zone"><option value="all">All</option></select><label class="control-label" for="time-set">Time set</label><select id="time-set"><option value="all">All</option></select></details>
+    </aside>
+    <main>
+      <section class="project-controls" aria-label="Project and export"><label for="project-directory">Data directory</label><div class="project-path"><input id="project-directory" type="text" placeholder="Path to the project directory"><button id="pick-directory" class="button">Browse…</button><button id="load-directory" class="button">Load</button></div><div class="project-export"><button id="export-excel" class="button primary">Generate Excel</button><label><input id="overwrite-excel" type="checkbox"> Overwrite existing</label><a id="excel-download" class="button" hidden>Download Excel (ZIP)</a></div><p id="project-status" class="hint" role="status">Excel workbooks are saved in results/ inside the data directory.</p></section>
+      <div class="page-heading"><div><p class="eyebrow">ACAB RESULTS</p><h1 id="title">Activity</h1><p id="subtitle">Select the cells and series to compare.</p></div><span id="units" class="unit-badge">Bq/cm³</span></div>
+      <div id="errors" class="message error" role="alert" hidden></div>
+      <div class="plot-card">
+        <div class="plot-toolbar"><div class="segmented view-switch"><button data-view="chart" class="active">Chart</button><button data-view="table">Data</button></div><div class="axis-controls"><label id="time-unit-wrap">Time <select id="time-unit"><option value="seconds">s</option><option value="hours">hours</option><option value="days">days</option><option value="years">years</option></select></label><label><input type="checkbox" id="log-x" checked> X log</label><label><input type="checkbox" id="log-y" checked> Y log</label><button id="reset" class="text-button">Reset axes</button></div></div>
+        <div class="typography-controls"><label>Chart font <input id="font-size" type="number" min="10" max="32" step="1" value="14" aria-label="Chart font size"> px</label><label>Legend <input id="legend-size" type="number" min="10" max="36" step="1" value="14" aria-label="Legend font size"> px</label></div><div class="range-toolbar"><span id="range-label">Time interval [s]</span><input type="number" id="minimum" placeholder="From" aria-label="Minimum time" min="0" step="any"><span>—</span><input type="number" id="maximum" placeholder="To" aria-label="Maximum time" min="0" step="any"><span id="range-summary" class="hint"></span></div>
+        <div class="axis-limits"><span class="hint">Chart limits · blank = automatic</span><div class="axis-limit-row"><span id="axis-x-label">X [s]</span><input id="xmin" type="number" step="any" placeholder="Automatic minimum" aria-label="X minimum"><input id="xmax" type="number" step="any" placeholder="Automatic maximum" aria-label="X maximum"></div><div class="axis-limit-row"><span id="axis-y-label">Y</span><input id="ymin" type="number" step="any" placeholder="Automatic minimum" aria-label="Y minimum"><input id="ymax" type="number" step="any" placeholder="Automatic maximum" aria-label="Y maximum"></div><button id="apply-axis-limits" class="text-button">Apply limits</button><p id="axis-limit-error" class="hint" role="alert" hidden></p></div><details id="curve-styles" class="curve-styles" hidden><summary>Curve colors</summary><p class="hint">Choose a color for each curve. The total line is 50% thicker.</p><div id="curve-colors"></div></details>
+        <div id="loading" class="loading" hidden><span class="spinner"></span><span id="loading-text">Reading results…</span></div>
+        <div id="chart" aria-label="Interactive results chart"></div><div id="empty" class="empty" hidden><h3 id="empty-title">Select a cell</h3><p id="empty-text">Results will appear here.</p></div>
+        <div id="table-view" hidden><div id="table-summary" class="hint table-summary"></div><div class="table-scroll"><table id="data-table"></table></div></div>
+        <div class="plot-footer"><p id="plot-note">Drag to zoom; double-click to reset. Click a series in the legend to hide it.</p><div class="downloads"><button id="csv" class="button" disabled>CSV</button><button id="svg" class="button" disabled>SVG</button><button id="png" class="button primary" disabled>Download PNG</button></div></div>
+      </div>
+      <div class="bottom-notes"><p id="source-note"></p><details id="warnings-wrap" hidden><summary id="warnings-title">Calculation warnings</summary><div id="warnings"></div></details></div>
+    </main>
+  </div>
+</body>
+</html>
